@@ -18,56 +18,63 @@ app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-
-app.use(bodyParser.urlencoded({ extended: false }))
-
-app.use(bodyParser.json())
-
 // Your first API endpoint
 app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-let shortUrlSchema = new mongoose.Schema({
-  short_url: String,
-  original_url: String,
-  suffix: String
+//Database
+
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+let urlSchema = new mongoose.Schema({
+  original : {type: String, required: true},
+  short: {type: String}
+});
+
+let Url = mongoose.model('Url', urlSchema)
+
+let responseObject = {}
+
+app.post('/api/shorturl/new', bodyParser.urlencoded({ extended: false }) , (req, res) => {
+  let inputUrl = req.body.url
+  let urlRegex = new RegExp(/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?/gi)
+
+  if(!inputUrl.match(urlRegex)) {
+    res.json({error: 'invalid url'})
+  }
+
+  responseObject['original_url'] = inputUrl
+
+  let newUrl = new Url({original: inputUrl, short: shortid.generate()})
+  Url.findOne({original: inputUrl}, (err, foundUrl) => {
+    if (!err && foundUrl === null) {
+      newUrl.save((err, result) => {
+        if (!err) {
+          responseObject['short_url'] = result.short
+          res.json(responseObject)
+        } 
+      })
+    } if (!err && foundUrl != null) {
+      responseObject.short_url = foundUrl.short
+      res.json(responseObject)
+    }
+  })
 })
 
-const ShortURl = mongoose.model('ShortURl', shortUrlSchema);
-
-app.post('/api/shorturl/new/', function (req, res) {
-  let clientRequestedUrl = req.body.url;
-  let shortened = shortid.generate();
-
-  let newUrl = new ShortURl({
-    short_url: __dirname + "/api/shorturl/" + shortened,
-    original_url: clientRequestedUrl,
-    suffix: shortened
-  })
-
-  newUrl.save(function(err, data) {
-    if (err) return console.log(err)
-    return data;
-  })
-
-  res.json({
-    "shortened_url": newUrl.short_url,
-    "original_url": newUrl.original_url,
-    "suffix": newUrl.suffix
-  })
-})
-
-app.get("/api/shorturl/:suffix", function(req, res) {
-  let userGeneratedSuffix = req.params.suffix;
-  ShortURl.find({suffix: userGeneratedSuffix}).then(function (foundUrls) {
-    let urlForRedirect = foundUrls[0]
-    console.log(urlForRedirect.original_url)
-    res.redirect(urlForRedirect.original_url)
+app.get('/api/shorturl/:input', (req, res) => {
+  let input = req.params.input
+  
+  Url.findOne({short: input}, (error, result) => {
+    if (!error && result != null) {
+      console.log(result)
+      res.redirect(result.original)
+    } else {
+      res.json('URL not found')
+    }
   })
 })
 
 app.listen(port, function() {
   console.log(`Listening on port ${port}`);
-});
+})
