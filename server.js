@@ -38,16 +38,18 @@ let responseObject = {}
 
 app.post('/api/shorturl/new', bodyParser.urlencoded({ extended: false }) , (req, res) => {
   let inputUrl = req.body.url
-  let urlRegex = new RegExp(/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?/gi)
+  let urlRegex = new RegExp(/^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/gm)
 
   if(!inputUrl.match(urlRegex)) {
     res.json({error: 'invalid url'})
+    return 
   }
 
   responseObject['original_url'] = inputUrl
 
   let newUrl = new Url({original: inputUrl, short: shortid.generate()})
   Url.findOne({original: inputUrl}, (err, foundUrl) => {
+    
     if (!err && foundUrl === null) {
       newUrl.save((err, result) => {
         if (!err) {
